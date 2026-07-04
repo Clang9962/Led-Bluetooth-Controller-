@@ -1,7 +1,7 @@
 name: Build iOS Unsigned IPA
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Allows you to trigger the build manually from your phone
 
 jobs:
   build:
@@ -16,12 +16,18 @@ jobs:
         with:
           channel: stable
 
-      - name: Fetch Packages
-        run: flutter pub get
-
       - name: Compile Native iOS Code Without Signing
         run: |
+          # 1. Rebuild missing or broken native iOS directory configurations cleanly
+          flutter create . --platforms=ios
+          
+          # 2. Map all Bluetooth and hardware plugins into the new iOS folder
+          flutter pub get
+          
+          # 3. Initialize build paths without code signatures
           flutter build ios --release --no-codesign --config-only
+          
+          # 4. Force the native Xcode compiler to completely skip profile validation checks
           cd ios
           xcodebuild -workspace Runner.xcworkspace \
             -scheme Runner \
@@ -36,6 +42,7 @@ jobs:
 
       - name: Package Payload to IPA
         run: |
+          # Create the standardized directory format that iOS expects
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r led_controller.ipa Payload
