@@ -1,7 +1,7 @@
 name: Build iOS Unsigned IPA
 
 on:
-  workflow_dispatch: # Allows you to trigger the build manually from your phone
+  workflow_dispatch:
 
 jobs:
   build:
@@ -16,29 +16,24 @@ jobs:
         with:
           channel: stable
 
-      - name: Compile Simulator Binary (Bypasses Signing)
+      - name: Configure and Compile App Bundle
         run: |
-          # 1. Clean the environment cache safely
+          # 1. Reset build cache and rebuild template project files
           flutter clean
-          
-          # 2. Force create fresh native deployment project layouts
           flutter create . --platforms=ios
-          
-          # 3. Pull required Bluetooth asset libraries down
           flutter pub get
           
-          # 4. Compile directly to an unsigned simulator profile structure 
+          # 2. Force the native project files to use iOS 13.0 as the minimum target version
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 12.0/IPHONEOS_DEPLOYMENT_TARGET = 13.0/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/deployment_target = '\''12.0'\''/deployment_target = '\''13.0'\''/g' ios/Podfile || true
+          
+          # 3. Build the simulator app package layout 
           flutter build ios --simulator --debug
 
       - name: Package Payload to IPA
         run: |
-          # 1. Build an installer directory layout
           mkdir -p Payload
-          
-          # 2. Copy the fresh compiled machine-code bundle into the package path
           cp -r build/ios/iphonesimulator/Runner.app Payload/
-          
-          # 3. Zip the folder container to finalize the flashable installer package
           zip -r led_controller.ipa Payload
 
       - name: Upload Finished IPA
