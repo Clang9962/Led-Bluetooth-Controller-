@@ -16,22 +16,20 @@ jobs:
         with:
           channel: stable
 
-      - name: Set up CocoaPods Natively
+      - name: Force Configure and Build iOS Directories
         run: |
-          sudo gem install cocoapods
-          pod setup
-
-      - name: Build App Asset Bundle
-        run: |
-          # 1. Pull down package architecture configuration
+          # 1. Force flutter create to cleanly generate ONLY the missing iOS directory
+          # using your existing package identity parameters to prevent a crash
+          flutter create . --platforms=ios --org com.example --project-name led_remote_app
+          
+          # 2. Re-fetch packages and link project dependencies 
           flutter pub get
           
-          # 2. Build for a simulator profile to strip development team profile requirements
+          # 3. Build for a simulator profile to strip development team profile requirements
           flutter build ios --simulator --debug
 
       - name: Package Payload to IPA
         run: |
-          # Re-route the compiled app bundle into a clean, flat installer structure
           mkdir -p Payload
           cp -r build/ios/iphonesimulator/Runner.app Payload/
           zip -r led_controller.ipa Payload
