@@ -16,41 +16,26 @@ jobs:
         with:
           channel: stable
 
-      - name: Fix Code and Compile
+      - name: Arrange Folders and Compile
         run: |
-          # 1. Rebuild the base template container cleanly
+          # 1. Rebuild base template container cleanly
           flutter create --platforms=ios --org com.example clean_build_holder
           cd clean_build_holder
           
-          # 2. Add required package dependencies
+          # 2. Add required architecture package dependencies
           flutter pub add flutter_blue_plus shared_preferences provider
           
-          # 3. Rebuild the structural subfolders expected by your imports
+          # 3. Mirror your project files into their matching folder tracks
           mkdir -p lib/constants
           mkdir -p lib/providers
           
-          # 4. Copy files into place
           cp ../lib/xc610_uuids.dart lib/constants/xc610_uuids.dart
+          cp ../lib/ble_provider.dart lib/providers/ble_provider.dart
           cp ../lib/home_screen.dart lib/home_screen.dart
           cp ../lib/device_screen.dart lib/device_screen.dart
           cp ../lib/main.dart lib/main.dart
           
-          # 5. Read your ble_provider.dart and use a safe Python replacement to fix the semicolons
-          python3 -c "
-          with open('../lib/ble_provider.dart', 'r') as f:
-              code = f.read()
-          # Fix line 76
-          code = code.replace(\"_addNotificationLog('Received: ' + value.map((e) => e.toRadixString(16)).join(' '))\", \"_addNotificationLog('Received: ' + value.map((e) => e.toRadixString(16)).join(' '));\")
-          # Fix alternative syntax pattern if needed
-          code = code.replace(\"join(' ')}\\\")\", \"join(' ')}');\")
-          with open('lib/providers/ble_provider.dart', 'w') as f:
-              f.write(code)
-          " || cp ../lib/ble_provider.dart lib/providers/ble_provider.dart
-          
-          # Quick manual fix fallback just in case python missed it
-          sed -i '' 's/_addNotificationLog.*join.*)[^;]$/&;/g' lib/providers/ble_provider.dart || true
-          
-          # 6. Fetch project packages and compile the simulator template
+          # 4. Fetch packages and execute build layout
           flutter pub get
           flutter build ios --simulator --debug
 
