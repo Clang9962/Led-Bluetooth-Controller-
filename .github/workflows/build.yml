@@ -1,31 +1,57 @@
-name: Export App Code For AI Analysis
+name: Build iOS Unsigned IPA
 
 on:
   workflow_dispatch:
 
 jobs:
-  export:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: macos-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Combine All Code Files
-        run: |
-          echo "=== PROJECT ARCHITECTURE OVERVIEW ===" > complete_codebase.txt
-          find lib -type f >> complete_codebase.txt
-          echo "" >> complete_codebase.txt
-          
-          for file in $(find lib -type f \( -name "*.dart" -o -name "*.yaml" \)); do
-            echo "========================================" >> complete_codebase.txt
-            echo "FILE: $file" >> complete_codebase.txt
-            echo "========================================" >> complete_codebase.txt
-            cat "$file" >> complete_codebase.txt
-            echo "" >> complete_codebase.txt
-          done
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
 
-      - name: Upload Complete Code Document
+      - name: Arrange Files and Compile Cleanly
+        run: |
+          # 1. Create a pristine new Flutter project environment
+          flutter create --platforms=ios --org com.example clean_build_holder
+          cd clean_build_holder
+          
+          # 2. Add structural package dependencies
+          flutter pub add flutter_blue_plus shared_preferences provider
+          
+          # 3. Create the subfolder layouts your file imports expect
+          mkdir -p lib/constants
+          mkdir -p lib/providers
+          
+          # 4. Copy your loose repo files into their expected folder homes
+          cp ../lib/xc610_uuids.dart lib/constants/xc610_uuids.dart
+          cp ../lib/ble_provider.dart lib/providers/ble_provider.dart
+          cp ../lib/home_screen.dart lib/home_screen.dart
+          cp ../lib/device_screen.dart lib/device_screen.dart
+          cp ../lib/main.dart lib/main.dart
+          
+          # 5. Automatically patch the missing semicolons in your ble_provider.dart file
+          sed -i '' 's/_addNotificationLog('\''Received: ${value.map((e) => e.toRadixString(16)).join('\'' '\'' '\'' '\'')}'\'')/&;/g' lib/providers/ble_provider.dart || true
+          sed -i '' 's/_addNotificationLog('\''Sent: ${fullCommand.map((e) => e.toRadixString(16)).join('\'' '\'' '\'' '\'')}'\'')/&;/g' lib/providers/ble_provider.dart || true
+          
+          # 6. Fetch project packages and compile the simulator bundle template
+          flutter pub get
+          flutter build ios --simulator --debug
+
+      - name: Package Payload to IPA
+        run: |
+          mkdir -p Payload
+          cp -r clean_build_holder/build/ios/iphonesimulator/Runner.app Payload/
+          zip -r led_controller.ipa Payload
+
+      - name: Upload Finished IPA
         uses: actions/upload-artifact@v4
         with:
-          name: project-codebase-text
-          path: complete_codebase.txt
+          name: unsigned-ipa-file
+          path: led_controller.ipa
