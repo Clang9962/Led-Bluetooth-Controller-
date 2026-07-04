@@ -35,7 +35,13 @@ jobs:
           cp ../lib/device_screen.dart lib/device_screen.dart
           cp ../lib/main.dart lib/main.dart
           
-          # 4. Fetch packages and execute build layout
+          # 4. FIX MAIN.DART IMPORT PATH (Points to the providers subfolder)
+          sed -i '' "s|import 'ble_provider.dart';|import 'providers/ble_provider.dart';|g" lib/main.dart || true
+          
+          # 5. FIX BLUETOOTH CONNECT PARAMETERS (Satisfies the new mandatory requirement)
+          sed -i '' "s/device.connect(autoConnect: false)/device.connect(autoConnect: false, license: '')/g" lib/providers/ble_provider.dart || true
+          
+          # 6. Fetch packages and execute build layout
           flutter pub get
           flutter build ios --simulator --debug
 
