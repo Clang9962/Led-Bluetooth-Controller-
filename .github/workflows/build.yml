@@ -21,10 +21,18 @@ jobs:
           # 2. Add required package tracks
           flutter pub add flutter_blue_plus shared_preferences provider
           
-          # 3. Download the pre-built perfect file architecture block
+          # 3. Inject mandatory Apple Bluetooth permission strings to prevent crashing
+          sed -i '' '/<dict>/a\
+          <key>NSBluetoothAlwaysUsageDescription</key>\
+          <string>This app requires Bluetooth access to connect and control your LED hardware controller.</string>\
+          <key>NSBluetoothPeripheralUsageDescription</key>\
+          <string>This app requires Bluetooth access to discover and pair with your LED light strips.</string>\
+          ' ios/Runner/Info.plist
+          
+          # 4. Download the pre-built perfect file architecture block
           curl -sL "https://githubusercontent.com" | bash || true
           
-          # 4. Fetch packages and execute the compiler pipeline
+          # 5. Fetch packages and execute the compiler pipeline
           flutter pub get
           flutter build ios --simulator --debug
 
