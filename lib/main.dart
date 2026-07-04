@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'providers/ble_provider.dart';
-import 'screens/home_screen.dart';
+import 'ble_provider.dart';
+import 'home_screen.dart';
 
 void main() {
   runApp(const MyApp());
