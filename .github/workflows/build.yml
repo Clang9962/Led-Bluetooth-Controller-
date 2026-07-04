@@ -16,22 +16,30 @@ jobs:
         with:
           channel: stable
 
-      - name: Force Configure and Build iOS Directories
+      - name: Rebuild Application Workspace Cleanly
         run: |
-          # 1. Force flutter create to cleanly generate ONLY the missing iOS directory
-          # using your existing package identity parameters to prevent a crash
-          flutter create . --platforms=ios --org com.example --project-name led_remote_app
+          # 1. Create a pristine new Flutter project environment in a sub-folder
+          flutter create --platforms=ios --org com.example clean_build_holder
           
-          # 2. Re-fetch packages and link project dependencies 
+          # 2. Swap out the template lib files with your custom Bluetooth lib folder files
+          rm -rf clean_build_holder/lib
+          cp -r lib clean_build_holder/lib
+          
+          # 3. Copy your project configuration specifications into the fresh environment
+          cp pubspec.yaml clean_build_holder/pubspec.yaml
+          
+          # 4. Navigate into the compiler folder and retrieve dependencies
+          cd clean_build_holder
           flutter pub get
           
-          # 3. Build for a simulator profile to strip development team profile requirements
+          # 5. Compile directly to an unsigned simulator binary architecture to skip profiles
           flutter build ios --simulator --debug
 
       - name: Package Payload to IPA
         run: |
+          # Map the compiled application bundle files into a flat directory structure
           mkdir -p Payload
-          cp -r build/ios/iphonesimulator/Runner.app Payload/
+          cp -r clean_build_holder/build/ios/iphonesimulator/Runner.app Payload/
           zip -r led_controller.ipa Payload
 
       - name: Upload Finished IPA
