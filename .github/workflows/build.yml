@@ -21,18 +21,18 @@ jobs:
           # 1. Create a pristine new Flutter project environment in a sub-folder
           flutter create --platforms=ios --org com.example clean_build_holder
           
-          # 2. Swap out the template lib files with your custom Bluetooth lib folder files
-          rm -rf clean_build_holder/lib
-          cp -r lib clean_build_holder/lib
-          
-          # 3. Copy your project configuration specifications into the fresh environment
-          cp pubspec.yaml clean_build_holder/pubspec.yaml
-          
-          # 4. Navigate into the compiler folder and retrieve dependencies
+          # 2. Add the missing core package dependencies directly to the workspace structure
           cd clean_build_holder
+          flutter pub add flutter_blue_plus shared_preferences provider
+          
+          # 3. Swap out the template lib files with your custom Bluetooth lib folder files
+          rm -rf lib
+          cp -r ../lib .
+          
+          # 4. Fetch packages to ensure everything matches smoothly
           flutter pub get
           
-          # 5. Compile directly to an unsigned simulator binary architecture to skip profiles
+          # 5. Compile directly to an unsigned simulator binary architecture
           flutter build ios --simulator --debug
 
       - name: Package Payload to IPA
