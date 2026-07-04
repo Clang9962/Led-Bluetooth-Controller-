@@ -16,23 +16,20 @@ jobs:
         with:
           channel: stable
 
-      - name: Patch and Compile Code Workspace
+      - name: Rebuild and Compile Workspace Cleanly
         run: |
           # 1. Create a pristine new Flutter project environment
           flutter create --platforms=ios --org com.example clean_build_holder
           cd clean_build_holder
           
-          # 2. Add structural package dependencies
+          # 2. Add exact required core package dependencies
           flutter pub add flutter_blue_plus shared_preferences provider
           
-          # 3. Rebuild your missing repository folder paths dynamically
+          # 3. Create the folder framework expected by your code imports
           mkdir -p lib/constants
           mkdir -p lib/providers
           
-          # 4. Pull your raw files straight into the workspace
-          cp -r ../lib/* lib/ || true
-          
-          # 5. Build the missing UUID mapping class file to clear imports
+          # 4. Generate the exact missing UUID configuration file
           cat << 'EOF' > lib/constants/xc610_uuids.dart
           class Xc610Uuids {
             static const String serviceUuid = "0000FFE0-0000-1000-8000-00805F9B34FB";
@@ -45,14 +42,150 @@ jobs:
           }
           EOF
           
-          # 6. Mirror your loose file into its expected subdirectory mapping
-          cp lib/ble_provider.dart lib/providers/ble_provider.dart || true
+          # 5. Bring in your home and device screens from the root repository
+          cp ../lib/home_screen.dart lib/home_screen.dart || true
+          cp ../lib/device_screen.dart lib/device_screen.dart || true
+          cp ../lib/main.dart lib/main.dart || true
           
-          # 7. Inject trailing semicolons onto the unclosed log lines automatically
-          sed -i '' 's/_addNotificationLog(.*join(.*)[^;]$/&;/g' lib/ble_provider.dart || true
-          sed -i '' 's/_addNotificationLog(.*join(.*)[^;]$/&;/g' lib/providers/ble_provider.dart || true
+          # 6. Re-write ble_provider.dart with your exact code AND the two missing semicolons added
+          cat << 'EOF' > lib/providers/ble_provider.dart
+          import 'package:flutter/foundation.dart';
+          import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+          import 'package:shared_preferences/shared_preferences.dart';
+          import '../constants/xc610_uuids.dart';
+
+          class BleProvider extends ChangeNotifier {
+            BluetoothDevice? _connectedDevice;
+            BluetoothCharacteristic? _writeCharacteristic;
+            BluetoothCharacteristic? _notifyCharacteristic;
+            bool _isConnected = false;
+            int _rssi = 0;
+            List<String> _notificationLog = [];
+
+            BluetoothDevice? get connectedDevice => _connectedDevice;
+            bool get isConnected => _isConnected;
+            int get rssi => _rssi;
+            List<String> get notificationLog => _notificationLog;
+
+            late SharedPreferences _prefs;
+
+            BleProvider() {
+              _initPreferences();
+            }
+
+            Future<void> _initPreferences() async {
+              _prefs = await SharedPreferences.getInstance();
+            }
+
+            Future<void> _reconnectLast() async {
+              await _initPreferences();
+              String? lastDeviceId = _prefs.getString('lastDeviceId');
+              if (lastDeviceId != null) {
+                try {
+                  List<BluetoothDevice> devices = await FlutterBluePlus.connectedDevices;
+                  BluetoothDevice? device = devices.firstWhere(
+                    (d) => d.remoteId.str == lastDeviceId,
+                    orElse: () => throw Exception('Device not found'),
+                  );
+                  await connectToDevice(device);
+                } catch (e) {
+                  if (kDebugMode) print('Failed to reconnect: $e');
+                }
+              }
+            }
+
+            Future<void> connectToDevice(BluetoothDevice device) async {
+              try {
+                await device.connect(autoConnect: false);
+                _connectedDevice = device;
+                _isConnected = true;
+                await _prefs.setString('lastDeviceId', device.remoteId.str);
+                await _discoverServices();
+                notifyListeners();
+              } catch (e) {
+                if (kDebugMode) print('Connection error: $e');
+                _isConnected = false;
+                notifyListeners();
+              }
+            }
+
+            Future<void> _discoverServices() async {
+              if (_connectedDevice == null) return;
+              try {
+                List<BluetoothService> services = await _connectedDevice!.discoverServices();
+                for (BluetoothService service in services) {
+                  if (service.uuid.str.toUpperCase() == Xc610Uuids.serviceUuid) {
+                    for (BluetoothCharacteristic char in service.characteristics) {
+                      if (char.uuid.str.toUpperCase() == Xc610Uuids.writeCharacteristicUuid) {
+                        _writeCharacteristic = char;
+                      }
+                      if (char.uuid.str.toUpperCase() == Xc610Uuids.notifyCharacteristicUuid) {
+                        _notifyCharacteristic = char;
+                        if (char.properties.notify) {
+                          await _notifyCharacteristic!.setNotifyValue(true);
+                          _notifyCharacteristic!.onValueReceived.listen((List<int> value) {
+                            _addNotificationLog('Received: ${value.map((e) => e.toRadixString(16)).join(' ')}');
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (e) {
+                if (kDebugMode) print('Service discovery error: $e');
+              }
+            }
+
+            Future<void> sendCommand(List<int> command) async {
+              if (_writeCharacteristic == null) return;
+              try {
+                List<int> fullCommand = [Xc610Uuids.commandPrefix, ...command];
+                await _writeCharacteristic!.write(fullCommand);
+                _addNotificationLog('Sent: ${fullCommand.map((e) => e.toRadixString(16)).join(' ')}');
+              } catch (e) {
+                if (kDebugMode) print('Send error: $e');
+              }
+            }
+
+            Future<void> setPower(bool on) async {
+              await sendCommand([Xc610Uuids.powerOn, on ? 1 : 0]);
+            }
+
+            Future<void> setBrightness(int brightness) async {
+              brightness = brightness.clamp(0, 255);
+              await sendCommand([Xc610Uuids.brightness, brightness]);
+            }
+
+            Future<void> setColor(int r, int g, int b) async {
+              await sendCommand([Xc610Uuids.color, r & 0xFF, g & 0xFF, b & 0xFF]);
+            }
+
+            Future<void> disconnect() async {
+              if (_connectedDevice != null) {
+                try {
+                  await _connectedDevice!.disconnect();
+                } catch (e) {
+                  if (kDebugMode) print('Disconnect error: $e');
+                }
+              }
+              _connectedDevice = null;
+              _isConnected = false;
+              _writeCharacteristic = null;
+              _notifyCharacteristic = null;
+              notifyListeners();
+            }
+
+            void _addNotificationLog(String message) {
+              _notificationLog.insert(0, '${DateTime.now().toIso8601String()}: $message');
+              if (_notificationLog.length > 50) {
+                _notificationLog.removeLast();
+              }
+              notifyListeners();
+            }
+          }
+          EOF
           
-          # 8. Execute compiler pipeline
+          # 7. Compile the complete project into a simulator bundle template
           flutter pub get
           flutter build ios --simulator --debug
 
