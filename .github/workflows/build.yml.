@@ -24,6 +24,32 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      name: Build Unsigned IPA
+
+on:
+  workflow_dispatch: # Allows you to manually trigger the build from your phone
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install Dependencies
+        run: flutter pub get
+
       - name: Build Unsigned IPA
         run: |
           flutter build ipa --release --no-codesign
@@ -31,6 +57,13 @@ jobs:
           mkdir Payload
           mv Runner.app Payload/
           zip -r ../../../../unsigned_app.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ipa
+          path: build/ios/unsigned_app.ipa
+
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
