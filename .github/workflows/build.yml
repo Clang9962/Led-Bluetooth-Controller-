@@ -16,28 +16,37 @@ jobs:
         with:
           channel: stable
 
-      - name: Rebuild Application Workspace Cleanly
+      - name: Patch Code Files and Compile Workspace
         run: |
-          # 1. Create a pristine new Flutter project environment in a sub-folder
+          # 1. Rebuild the base template container cleanly
           flutter create --platforms=ios --org com.example clean_build_holder
-          
-          # 2. Add the missing core package dependencies directly to the workspace structure
           cd clean_build_holder
+          
+          # 2. Add dependencies
           flutter pub add flutter_blue_plus shared_preferences provider
           
-          # 3. Swap out the template lib files with your custom Bluetooth lib folder files
+          # 3. Import raw source files
           rm -rf lib
           cp -r ../lib .
           
-          # 4. Fetch packages to ensure everything matches smoothly
-          flutter pub get
+          # 4. FIX INTER-FILE IMPORTS (Changes package routing maps to handle flat file structure)
+          sed -i '' "s|import '../constants/xc610_uuids.dart';|import 'xc610_uuids.dart';|g" lib/ble_provider.dart || true
+          sed -i '' "s|import '../providers/ble_provider.dart';|import 'ble_provider.dart';|g" lib/home_screen.dart || true
+          sed -i '' "s|import '../providers/ble_provider.dart';|import 'ble_provider.dart';|g" lib/device_screen.dart || true
           
-          # 5. Compile directly to an unsigned simulator binary architecture
+          # 5. FIX SYNTAX ERRORS (Injects missing semicolons onto logging lines)
+          sed -i '' "s/_addNotificationLog('Received: \${value.map((e) => e.toRadixString(16)).join(' ')}')/_addNotificationLog('Received: \${value.map((e) => e.toRadixString(16)).join(\' \')}');/g" lib/ble_provider.dart || true
+          sed -i '' "s/_addNotificationLog('Sent: \${fullCommand.map((e) => e.toRadixString(16)).join(' ')}')/_addNotificationLog('Sent: \${fullCommand.map((e) => e.toRadixString(16)).join(\' \')}');/g" lib/ble_provider.dart || true
+          
+          # 6. PATCH BLUETOOTH CONNECT PARAMETERS (Workaround for the breaking library update change)
+          sed -i '' "s/await device.connect()/await device.connect(autoConnect: false)/g" lib/ble_provider.dart || true
+          
+          # 7. Fetch packages and execute build
+          flutter pub get
           flutter build ios --simulator --debug
 
       - name: Package Payload to IPA
         run: |
-          # Map the compiled application bundle files into a flat directory structure
           mkdir -p Payload
           cp -r clean_build_holder/build/ios/iphonesimulator/Runner.app Payload/
           zip -r led_controller.ipa Payload
