@@ -16,26 +16,33 @@ jobs:
         with:
           channel: stable
 
-      - name: Compile Native iOS Code Without Signing
+      - name: Compile Simulator Binary (Bypasses Signing)
         run: |
-          # 1. Rebuild missing or broken native iOS directory configurations cleanly
+          # 1. Clean the environment cache safely
+          flutter clean
+          
+          # 2. Force create fresh native deployment project layouts
           flutter create . --platforms=ios
           
-          # 2. Map all Bluetooth and hardware plugins into the new iOS folder
+          # 3. Pull required Bluetooth asset libraries down
           flutter pub get
           
-          # 3. Initialize build paths without code signatures
-          flutter build ios --release --no-codesign --config-only
+          # 4. Compile directly to an unsigned simulator profile structure 
+          flutter build ios --simulator --debug
+
+      - name: Package Payload to IPA
+        run: |
+          # 1. Build an installer directory layout
+          mkdir -p Payload
           
-          # 4. Force the native Xcode compiler to completely skip profile validation checks
-          cd ios
-          xcodebuild -workspace Runner.xcworkspace \
-            -scheme Runner \
-            -sdk iphoneos \
-            -configuration Release \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            DEVELOPMENT
-        
+          # 2. Copy the fresh compiled machine-code bundle into the package path
+          cp -r build/ios/iphonesimulator/Runner.app Payload/
+          
+          # 3. Zip the folder container to finalize the flashable installer package
+          zip -r led_controller.ipa Payload
+
+      - name: Upload Finished IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ipa-file
+          path: led_controller.ipa
